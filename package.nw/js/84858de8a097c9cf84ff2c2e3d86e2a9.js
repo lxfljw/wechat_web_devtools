@@ -235,7 +235,7 @@
     removeProject: function removeProject(id) {
       delete this._projectList[id];
       if (!this._accessTime) {
-        this.recentProjects;
+        this.initAccessTime();
       }
       if (this._accessTime && this._accessTime[id]) {
         delete this._accessTime[id];
@@ -250,6 +250,17 @@
           removeItem(key);
         }
       }
+    },
+    initAccessTime: function initAccessTime() {
+      this._accessTime = {};
+      var accessTime = JSON.parse(getItem(config.PROJECT_ACCESS_TIME) || '{}');
+      for (var projectid in accessTime) {
+        if (this.projectList[projectid] && accessTime[projectid]) {
+          this._accessTime[projectid] = accessTime[projectid];
+        }
+      }
+
+      setItem(config.PROJECT_ACCESS_TIME, JSON.stringify(accessTime));
     },
 
 
@@ -275,7 +286,7 @@
         setItem(config.LAST_SELECT, '' + config.PROJECT_PREFIX + projectid);
 
         if (!this._accessTime) {
-          this.recentProjects;
+          this.initAccessTime();
         }
 
         this._accessTime[projectid] = +new Date();
@@ -289,27 +300,12 @@
       var _this = this;
 
       if (!this._accessTime) {
-        this._accessTime = {};
-        var accessTime = JSON.parse(getItem(config.PROJECT_ACCESS_TIME) || '{}');
-        for (var projectid in accessTime) {
-          if (this.projectList[projectid] && accessTime[projectid]) {
-            this._accessTime[projectid] = accessTime[projectid];
-          }
-        }
-
-        setItem(config.PROJECT_ACCESS_TIME, JSON.stringify(accessTime));
-
-        var recentProjects = Object.keys(this._accessTime).sort(function (pid1, pid2) {
-          return _this._accessTime[pid2] - _this._accessTime[pid1];
-        });
-
-        return recentProjects;
-      } else {
-        var _recentProjects = Object.keys(this._accessTime).sort(function (pid1, pid2) {
-          return _this._accessTime[pid2] - _this._accessTime[pid1];
-        });
-        return _recentProjects;
+        this.initAccessTime();
       }
+      var recentProjects = Object.keys(this._accessTime).sort(function (pid1, pid2) {
+        return _this._accessTime[pid2] - _this._accessTime[pid1];
+      }).slice(0, 11);
+      return recentProjects;
     },
 
     set recentProjects(value) {
@@ -409,7 +405,7 @@
     get batchSyncKey() {
       if (!this._batchSyncKey) {
         try {
-          var data = JSON.stringify(getItem(config.BATCH_SYNC_KEY)) || {};
+          var data = JSON.parse(getItem(config.BATCH_SYNC_KEY)) || {};
           if (data.hasOwnProperty('sync_id') && data.hasOwnProperty('sync_seq')) {
             this._batchSyncKey = data;
             return this._batchSyncKey;
@@ -552,39 +548,87 @@
         setItem('' + config.WINDOW_PREFIX + id, JSON.stringify(state));
       } catch (e) {}
     },
+
+
     updateProjectId: function updateProjectId(oldProjectid, newProjectId) {
-      const commonFileKeys = [config.LAST_SELECT, config.PROJECT_ACCESS_TIME]
-      const dataPrefix = 'localstorage_'
-      const prefixFileKeys = [
-        dataPrefix + config.PROJECT_PREFIX,
-        dataPrefix + config.TOOLBAR_PREFIX,
-        dataPrefix + config.WINDOW_PREFIX,
-        config.PROJECT_COVER_PREFIX]
-      const replaceFileContent = path => {
-        const replaceReg = new RegExp(oldProjectid, 'g')
-        const content = fs.readFileSync(path, 'utf8')
-        const newContent = content.replace(replaceReg, newProjectId)
-        fs.writeFileSync(path, newContent, 'utf8')
-      }
+      var commonFileKeys = [config.LAST_SELECT, config.PROJECT_ACCESS_TIME];
+      var dataPrefix = 'localstorage_';
+      var prefixFileKeys = [dataPrefix + config.PROJECT_PREFIX, dataPrefix + config.TOOLBAR_PREFIX, dataPrefix + config.WINDOW_PREFIX, config.PROJECT_COVER_PREFIX];
+      var replaceFileContent = function replaceFileContent(path) {
+        var replaceReg = new RegExp(oldProjectid, 'g');
+        var content = fs.readFileSync(path, 'utf8');
+        var newContent = content.replace(replaceReg, newProjectId);
+        fs.writeFileSync(path, newContent, 'utf8');
+      };
       try {
-        for(const key of commonFileKeys) {
-          replaceFileContent(getDataFilePath(key))
+        var _iteratorNormalCompletion = true;
+        var _didIteratorError = false;
+        var _iteratorError = undefined;
+
+        try {
+          for (var _iterator = commonFileKeys[Symbol.iterator](), _step; !(_iteratorNormalCompletion = (_step = _iterator.next()).done); _iteratorNormalCompletion = true) {
+            var key = _step.value;
+
+            replaceFileContent(getDataFilePath(key));
+          }
+        } catch (err) {
+          _didIteratorError = true;
+          _iteratorError = err;
+        } finally {
+          try {
+            if (!_iteratorNormalCompletion && _iterator.return) {
+              _iterator.return();
+            }
+          } finally {
+            if (_didIteratorError) {
+              throw _iteratorError;
+            }
+          }
         }
 
-        const names = fs.readdirSync(WeappLocalData);
-        for(const name of names) {
-          const prefix = prefixFileKeys.find(prefix => name.startsWith(prefix + oldProjectid))
-          if(prefix) {
-            const newName = name.replace(oldProjectid, newProjectId)
-            fs.renameSync(path.join(WeappLocalData, name), path.join(WeappLocalData, newName))
+        var names = fs.readdirSync(WeappLocalData);
+        var _iteratorNormalCompletion2 = true;
+        var _didIteratorError2 = false;
+        var _iteratorError2 = undefined;
+
+        try {
+          var _loop = function _loop() {
+            var name = _step2.value;
+
+            var prefix = prefixFileKeys.find(function (prefix) {
+              return name.startsWith(prefix + oldProjectid);
+            });
+            if (prefix) {
+              var newName = name.replace(oldProjectid, newProjectId);
+              fs.renameSync(path.join(WeappLocalData, name), path.join(WeappLocalData, newName));
+            }
+            if (prefix === config.PROJECT_PREFIX) {
+              replaceFileContent(path.join(WeappLocalData, name));
+            }
+          };
+
+          for (var _iterator2 = names[Symbol.iterator](), _step2; !(_iteratorNormalCompletion2 = (_step2 = _iterator2.next()).done); _iteratorNormalCompletion2 = true) {
+            _loop();
           }
-          if(prefix === config.PROJECT_PREFIX) {
-            replaceFileContent(path.join(WeappLocalData, name))
+        } catch (err) {
+          _didIteratorError2 = true;
+          _iteratorError2 = err;
+        } finally {
+          try {
+            if (!_iteratorNormalCompletion2 && _iterator2.return) {
+              _iterator2.return();
+            }
+          } finally {
+            if (_didIteratorError2) {
+              throw _iteratorError2;
+            }
           }
         }
-        this.updateProject(newProjectId, this.projectList[oldProjectid])
-        this.removeProject(oldProjectid)
-      } catch(e) {}
+
+        this.updateProject(newProjectId, this.projectList[oldProjectid]);
+        this.removeProject(oldProjectid);
+      } catch (e) {}
     }
+
   };
 })();
